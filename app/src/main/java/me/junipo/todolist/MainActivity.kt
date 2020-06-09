@@ -5,9 +5,9 @@ import android.graphics.Typeface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
+import androidx.activity.viewModels
+import androidx.lifecycle.ViewModel
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import me.junipo.todolist.databinding.ActivityMainBinding
@@ -17,7 +17,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
 
-    private val tempData = arrayListOf<Todo>()
+    val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,43 +26,46 @@ class MainActivity : AppCompatActivity() {
         val view = binding.root
         setContentView(view)
 
-        tempData.add(Todo("코틀린"))
-        tempData.add(Todo("자바", true))
 
         binding.itemRecyclerView.apply {
-            layoutManager =LinearLayoutManager(this@MainActivity)
-            adapter = TodoAdapter(tempData,
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = TodoAdapter(
+                viewModel.data,
                 onClickDeleteIcon = {
-                    deleteTodo(it)
+                    viewModel.deleteTodo(it)
+                    binding.itemRecyclerView.adapter?.notifyDataSetChanged()
                 },
                 onClickItem = {
-                    toggleTodo(it)
+                    viewModel.toggleTodo(it)
+                    binding.itemRecyclerView.adapter?.notifyDataSetChanged()
                 }
             )
         }
 
         binding.addButton.setOnClickListener {
-            addTodo()
+            val todo = Todo(binding.editText.text.toString())
+            viewModel.addTodo(todo)
+            binding.itemRecyclerView.adapter?.notifyDataSetChanged()
         }
 
         //setContentView(R.layout.activity_main)
     }
 
-    private fun toggleTodo(todo: Todo) {
-        todo.isDone = !todo.isDone
-        binding.itemRecyclerView.adapter?.notifyDataSetChanged()
-    }
-
-    private fun addTodo() {
-        val todo = Todo(binding.editText.text.toString())
-        tempData.add(todo)
-        binding.itemRecyclerView.adapter?.notifyDataSetChanged()
-    }
-
-    private fun deleteTodo(todo: Todo) {
-        tempData.remove(todo)
-        binding.itemRecyclerView.adapter?.notifyDataSetChanged()
-    }
+//    private fun toggleTodo(todo: Todo) {
+//        todo.isDone = !todo.isDone
+//        binding.itemRecyclerView.adapter?.notifyDataSetChanged()
+//    }
+//
+//    private fun addTodo() {
+//        val todo = Todo(binding.editText.text.toString())
+//        data.add(todo)
+//        binding.itemRecyclerView.adapter?.notifyDataSetChanged()
+//    }
+//
+//    private fun deleteTodo(todo: Todo) {
+//        data.remove(todo)
+//        binding.itemRecyclerView.adapter?.notifyDataSetChanged()
+//    }
 }
 
 data class Todo(
@@ -93,12 +96,12 @@ class TodoAdapter(
         val todo = myDataset[position]
         holder.binding.todoText.text = todo.text
 
-        if(todo.isDone) {
+        if (todo.isDone) {
             holder.binding.todoText.apply {
                 paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
                 setTypeface(null, Typeface.ITALIC)
             }
-        }else{
+        } else {
             holder.binding.todoText.apply {
                 paintFlags = 0
                 setTypeface(null, Typeface.NORMAL)
@@ -118,3 +121,20 @@ class TodoAdapter(
     override fun getItemCount() = myDataset.size
 }
 
+class MainViewModel : ViewModel() {
+
+    val data = arrayListOf<Todo>()
+
+    fun toggleTodo(todo: Todo) {
+        todo.isDone = !todo.isDone
+    }
+
+    fun addTodo(todo: Todo) {
+        data.add(todo)
+    }
+
+    fun deleteTodo(todo: Todo) {
+        data.remove(todo)
+    }
+
+}
