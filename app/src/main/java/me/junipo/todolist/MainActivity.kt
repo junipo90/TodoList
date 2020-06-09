@@ -16,6 +16,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.IdpResponse
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.QueryDocumentSnapshot
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import me.junipo.todolist.databinding.ActivityMainBinding
 import me.junipo.todolist.databinding.ItemTodoBinding
 
@@ -34,13 +38,9 @@ class MainActivity : AppCompatActivity() {
         val view = binding.root
         setContentView(view)
 
-        //로그인 안된 상
         if (FirebaseAuth.getInstance().currentUser == null) {
-           login()
+            login()
         }
-
-
-
 
         binding.itemRecyclerView.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
@@ -72,18 +72,9 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == RC_SIGN_IN) {
-            val response = IdpResponse.fromResultIntent(data)
-
             if (resultCode == Activity.RESULT_OK) {
-                // Successfully signed in
-                val user = FirebaseAuth.getInstance().currentUser
-                // ...
+                viewModel.fetchData()
             } else {
-                // Sign in failed. If response is null the user canceled the
-                // sign-in flow using the back button. Otherwise check
-                // response.getError().getErrorCode() and handle the error.
-                // ...
-                //로그인 실패
                 finish()
             }
         }
@@ -96,7 +87,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        // Handle item selection
         return when (item.itemId) {
             R.id.action_log_out -> {
                 logout()
@@ -106,7 +96,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun login(){
+    fun login() {
         val providers = arrayListOf(
             AuthUI.IdpConfig.EmailBuilder().build()
         )
@@ -135,9 +125,9 @@ data class Todo(
 )
 
 class TodoAdapter(
-    private var myDataset: List<Todo>,
-    val onClickDeleteIcon: (todo: Todo) -> Unit,
-    val onClickItem: (todo: Todo) -> Unit
+    private var myDataset: List<DocumentSnapshot>,
+    val onClickDeleteIcon: (todo: DocumentSnapshot) -> Unit,
+    val onClickItem: (todo: DocumentSnapshot) -> Unit
 ) :
     RecyclerView.Adapter<TodoAdapter.TodoViewHolder>() {
 
@@ -146,7 +136,7 @@ class TodoAdapter(
     override fun onCreateViewHolder(
         parent: ViewGroup,
         viewType: Int
-    ): TodoAdapter.TodoViewHolder {
+    ): TodoViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_todo, parent, false)
 
@@ -155,9 +145,9 @@ class TodoAdapter(
 
     override fun onBindViewHolder(holder: TodoViewHolder, position: Int) {
         val todo = myDataset[position]
-        holder.binding.todoText.text = todo.text
+        holder.binding.todoText.text = todo.getString("text") ?: ""
 
-        if (todo.isDone) {
+        if (todo.getBoolean("isDone") == true) {
             holder.binding.todoText.apply {
                 paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
                 setTypeface(null, Typeface.ITALIC)
@@ -181,30 +171,55 @@ class TodoAdapter(
 
     override fun getItemCount() = myDataset.size
 
-    fun setData(newData: List<Todo>) {
+    fun setData(newData: List<DocumentSnapshot>) {
         myDataset = newData
         notifyDataSetChanged()
     }
 }
 
 class MainViewModel : ViewModel() {
+    val db = Firebase.firestore
+    val todoLiveData = MutableLiveData<List<DocumentSnapshot>>()
+    init {
+        fetchData()
+    }
 
-    val todoLiveData = MutableLiveData<List<Todo>>()
-    private val data = arrayListOf<Todo>()
+    fun fetchData() {
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            db.collection(user.uid).orderBy("text")
+                .addSnapshotListener { value, e ->
+                    if (e != null) {
+                        return@addSnapshotListener
+                    }
+                    if( value != null){
+                        todoLiveData.value = value.documents
+                    }
+                }
+        }
 
-    fun toggleTodo(todo: Todo) {
-        todo.isDone = !todo.isDone
-        todoLiveData.value = data
+    }
+
+    fun toggleTodo(todo: DocumentSnapshot) {
+        FirebaseAuth.getInstance().currentUser?.let { user ->
+            val isDone = todo.getBoolean("isDone") ?: false
+            db.collection(user.uid).document(todo.id).update("isDone", !isDone)
+        }
     }
 
     fun addTodo(todo: Todo) {
-        data.add(todo)
-        todoLiveData.value = data
+        FirebaseAuth.getInstance().currentUser?.let { user ->
+            db.collection(user.uid).add(todo)
+        }
+
+//        data.add(todo)
+//        todoLiveData.value = data
     }
 
-    fun deleteTodo(todo: Todo) {
-        data.remove(todo)
-        todoLiveData.value = data
+    fun deleteTodo(todo: DocumentSnapshot) {
+        FirebaseAuth.getInstance().currentUser?.let { user ->
+            db.collection(user.uid).document(todo.id).delete()
+        }
     }
 
 }
